@@ -31,3 +31,22 @@ def separate_transcription_into_themes(text):
     )
     completion = response.choices[0].message.content    
     return completion
+
+def transcription_ai_cleanup(text):
+    print(text)
+    # Define the prompt for the model
+    prompt = f"""
+    Please clean the text of repetitions.
+    Don't add anything by yourself.
+
+    The text is: "{text}"
+    """
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": "You are a helpful assistant."},
+                  {"role": "user", "content": prompt}],
+        max_tokens=4096,
+        temperature=0.7,
+    )
+    completion = response.choices[0].message.content    
+    return completion

@@ -1,7 +1,7 @@
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from .video_functions import download_youtube_video, extract_audio, transcribe_audio_with_azure
-from .cards_functions import separate_transcription_into_themes
+from .ai_funktions import separate_transcription_into_themes
 from django.views.decorators.csrf import csrf_exempt
 import os
 from django.core.files.storage import FileSystemStorage

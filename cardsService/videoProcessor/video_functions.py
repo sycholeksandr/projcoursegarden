@@ -1,5 +1,4 @@
 from moviepy.editor import VideoFileClip
-import whisper
 import os
 import yt_dlp
 from . import local_settings
@@ -7,7 +6,7 @@ import azure.cognitiveservices.speech as speechsdk
 import threading
 from pydub import AudioSegment
 import concurrent.futures 
-
+from .ai_funktions import transcription_ai_cleanup
 # Function that downloads video from given YouTube URL
 # and saves the video in specified place
 def download_youtube_video(youtube_url, download_path):
@@ -49,7 +48,7 @@ def increase_audio_speed(input_file, output_file):
 
     return output_file
 
-def transcribe_chunk(chunk_path):
+def transcribe_chunk(chunk_path, start_index):
     speech_config = speechsdk.SpeechConfig(
         subscription=local_settings.AZURE_SPEECH_KEY, region='eastus')
     auto_detect_source_language_config = speechsdk.languageconfig.AutoDetectSourceLanguageConfig(
@@ -62,8 +61,7 @@ def transcribe_chunk(chunk_path):
         audio_config=audio_input
     )
     result = speech_recognizer.recognize_once()
-    print(result)
-    return result.text
+    return start_index, result.text
 
 def transcribe_audio_with_azure(audio_path):
     chunk_length_ms = 10000
@@ -82,20 +80,27 @@ def transcribe_audio_with_azure(audio_path):
         # Save the chunk as a temporary file
         chunk_path = f"{temp_audio_path}_chunk{i}.wav"
         chunk.export(chunk_path, format="wav")
-        chunks.append(chunk_path)
+        chunks.append((chunk_path, start))
     
-    # Transcribe each chunk concurrently
+    # Transcribe each chunk concurrently 
+    # and collect results with their start indices
+    results = []
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = [executor.submit(transcribe_chunk, chunk_path)
-                    for chunk_path in chunks]
-        results = [f.result() 
-                    for f in concurrent.futures.as_completed(futures)]
-    
+        futures = {executor.submit(transcribe_chunk, chunk_path, start):
+                   start for chunk_path, start in chunks}
+        for future in concurrent.futures.as_completed(futures):
+            start_index, result_text = future.result()
+            results.append((start_index, result_text))
+
+    # Sort results based on start index
+    results.sort(key=lambda x: x[0])
+
+    # Combine sorted transcriptions into a single string
+    transcription_result = transcription_ai_cleanup(" ".join([text for _, text in results]))
+
     # Clean up temporary files
     for chunk_path in chunks:
-        os.remove(chunk_path)
+        os.remove(chunk_path[0])
     os.remove(temp_audio_path)
     
-    # Combine all transcriptions into a single string
-    return " ".join(results)
-    
+    return transcription_result  
